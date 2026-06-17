@@ -55,7 +55,10 @@ enum OpenfortClient {
     /// encryption-session) or a user-chosen password; a constant keeps this single-device testnet
     /// demo deterministic and reset-proof (a random per-device password breaks recovery whenever
     /// the Keychain is cleared).
-    private static let recoveryPassword = "openfort-venmo-demo-recovery-v1"
+    // Must match the password the user's embedded signer was first created with. This fork shares
+    // the same Openfort project + users as stable-cashapp, so recovering an account onboarded there
+    // requires the original value — changing it makes password recovery fail (stuck on "Setting up").
+    private static let recoveryPassword = "openfort-cash-demo-recovery-v1"
 
     @discardableResult
     static func configureWallet() async throws -> OFEmbeddedAccount? {

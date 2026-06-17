@@ -73,7 +73,7 @@ struct FeedView: View {
                 }
             }
             Button { showReceive = true } label: {
-                Label("Add money", systemImage: "qrcode")
+                Label("Receive", systemImage: "qrcode")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.blueDark)
                     .frame(maxWidth: .infinity)
