@@ -81,9 +81,23 @@ final class WalletStore: ObservableObject {
         do {
             apply(account: try await OpenfortClient.configureWallet())
         } catch {
-            errorMessage = friendly(error)
             didKickConfigure = false
+            // A wrong recovery password means this email's embedded signer was created with a
+            // different password (e.g. on another build). There's no client-side recovery, so sign
+            // out instead of dead-ending on the setup splash, and steer the user to a fresh email.
+            if isWrongRecoveryPassword(error) {
+                errorMessage = "This email's wallet was set up with a different recovery password. "
+                    + "Please log in with a different email."
+                await signOut()
+            } else {
+                errorMessage = friendly(error)
+            }
         }
+    }
+
+    private func isWrongRecoveryPassword(_ error: Error) -> Bool {
+        let raw = ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription).lowercased()
+        return raw.contains("recovery password")
     }
 
     private func onReady() async {
