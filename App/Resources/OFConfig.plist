@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- MAIN test project (pro_7ee13324). Publishable + Shield-publishable are safe to ship in-client. -->
+	<key>openfortPublishableKey</key>
+	<string>pk_test_a315c7dc-24fd-53a2-be34-6c7b79c5f2cd</string>
+	<key>shieldPublishableKey</key>
+	<string>bc86c9c3-3496-4cba-a400-76a9aef14953</string>
+	<!-- Optional: enables verbose SDK logging. -->
+	<key>debug</key>
+	<true/>
+</dict>
+</plist>

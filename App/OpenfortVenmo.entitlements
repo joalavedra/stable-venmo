@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Grants keychain access (the SDK stores session state in the Keychain). Without it,
+	     unsigned/simulator builds get errSecMissingEntitlement (-34018) on every SecItem call. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>io.openfort.venmodemo</string>
+	</array>
+</dict>
+</plist>
