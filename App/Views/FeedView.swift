@@ -4,6 +4,7 @@ import SwiftUI
 /// USDC `Transfer` events and dressed with their off-chain notes.
 struct FeedView: View {
     @EnvironmentObject private var wallet: WalletStore
+    @Environment(\.openURL) private var openURL
     @State private var transfers: [USDCTransfer] = []
     @State private var loading = false
     @State private var showReceive = false
@@ -115,8 +116,10 @@ struct FeedView: View {
     private var feedList: some View {
         VStack(spacing: 0) {
             ForEach(transfers) { transfer in
-                Link(destination: URL(string: "https://sepolia.basescan.org/tx/\(transfer.hash)")!) {
-                    FeedRow(transfer: transfer)
+                FeedRow(transfer: transfer) {
+                    if let url = URL(string: "https://sepolia.basescan.org/tx/\(transfer.hash)") {
+                        openURL(url)
+                    }
                 }
                 if transfer.id != transfers.last?.id {
                     Divider().padding(.leading, 60)
@@ -134,39 +137,67 @@ struct FeedView: View {
     }
 }
 
-/// A single Venmo-style feed entry: who paid whom, the note, and the amount.
+/// A single Venmo-style feed entry: who paid whom, the note, the amount, and the social row
+/// (public audience + like/comment) that gives the feed its Venmo texture.
 private struct FeedRow: View {
     let transfer: USDCTransfer
+    var onOpen: () -> Void
+    @State private var liked = false
 
     private var note: String { NoteStore.display(for: transfer.hash, outgoing: transfer.isOutgoing) }
-    private var actorLine: String {
-        transfer.isOutgoing
-            ? "You paid \(shortAddress(transfer.counterparty))"
-            : "\(shortAddress(transfer.counterparty)) paid you"
+    private var counterparty: String { shortAddress(transfer.counterparty) }
+
+    /// "You paid 0x12…34" / "0x12…34 paid you" with the names in semibold and the verb muted.
+    private var actorLine: Text {
+        let verb = Text(" paid ").foregroundColor(Theme.subtle)
+        let them = Text(counterparty).fontWeight(.semibold).foregroundColor(Theme.ink)
+        let you = Text("You").fontWeight(.semibold).foregroundColor(Theme.ink)
+        let youLower = Text("you").fontWeight(.semibold).foregroundColor(Theme.ink)
+        return transfer.isOutgoing ? (you + verb + them) : (them + verb + youLower)
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Avatar(seed: transfer.counterparty, size: 44)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(actorLine)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.ink)
-                Text(note)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.subtle)
-                    .lineLimit(2)
-                Label("Friends", systemImage: "person.2.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.subtle.opacity(0.8))
-                    .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        actorLine.font(.system(size: 15))
+                        Spacer(minLength: 8)
+                        Text((transfer.isOutgoing ? "– " : "+ ") + formatUSD(transfer.amount))
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(transfer.isOutgoing ? Theme.ink : Theme.blue)
+                    }
+                    Text(note)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.ink.opacity(0.85))
+                        .lineLimit(2)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { onOpen() }
+                socialRow
             }
-            Spacer(minLength: 8)
-            Text((transfer.isOutgoing ? "– " : "+ ") + formatUSD(transfer.amount))
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(transfer.isOutgoing ? Theme.ink : Theme.blue)
         }
         .padding(.vertical, 14)
-        .contentShape(Rectangle())
+    }
+
+    private var socialRow: some View {
+        HStack(spacing: 14) {
+            Label("Public", systemImage: "globe.americas.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.subtle)
+            Spacer()
+            Button {
+                liked.toggle()
+            } label: {
+                Image(systemName: liked ? "heart.fill" : "heart")
+                    .foregroundStyle(liked ? .pink : Theme.subtle)
+            }
+            .buttonStyle(.plain)
+            Image(systemName: "bubble.right")
+                .foregroundStyle(Theme.subtle)
+        }
+        .font(.system(size: 15))
+        .padding(.top, 1)
     }
 }

@@ -126,6 +126,7 @@ extension View {
 func formatUSD(_ amount: Decimal, symbol: Bool = true) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
+    formatter.locale = Locale(identifier: "en_US")   // always a "." decimal next to the $ sign
     formatter.minimumFractionDigits = 2
     formatter.maximumFractionDigits = 2
     let number = formatter.string(from: amount as NSDecimalNumber) ?? "0.00"

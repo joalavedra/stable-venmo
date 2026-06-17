@@ -1,12 +1,13 @@
 import SwiftUI
 import UIKit
 
-/// Venmo's "Pay or Request" composer: an amount, a note ("What's it for?"), a recipient, and the
-/// two signature actions. Paying sends USDC gaslessly via EIP-7702; requesting surfaces a
-/// shareable QR so the other side can pay you.
+/// Venmo's "Pay or Request" composer: a recipient, a big amount driven by an always-visible
+/// number pad, a note ("What's it for?"), and the two signature actions. Paying sends USDC
+/// gaslessly via EIP-7702; requesting surfaces a shareable QR so the other side can pay you.
 struct PayView: View {
     @EnvironmentObject private var wallet: WalletStore
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var noteFocused: Bool
 
     var presetAmount: Decimal
     @State private var recipient = ""
@@ -18,7 +19,7 @@ struct PayView: View {
 
     init(presetAmount: Decimal) {
         self.presetAmount = presetAmount
-        _amountText = State(initialValue: presetAmount > 0 ? formatUSD(presetAmount, symbol: false) : "")
+        _amountText = State(initialValue: presetAmount > 0 ? formatUSD(presetAmount, symbol: false) : "0")
     }
 
     private var amount: Decimal { Decimal(string: amountText) ?? 0 }
@@ -34,96 +35,97 @@ struct PayView: View {
                 } else if requested {
                     requestCreated
                 } else {
-                    form
+                    composer
                 }
             }
             .navigationTitle(txHash != nil || requested ? "" : "Pay or Request")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer(); Button("Done") { noteFocused = false }
+                }
+            }
         }
         .presentationDragIndicator(.visible)
     }
 
-    // MARK: - Form
+    // MARK: - Composer
 
-    private var form: some View {
-        ScrollView {
-            VStack(spacing: 22) {
-                amountField
-                noteField
-                recipientField
+    private var composer: some View {
+        VStack(spacing: 0) {
+            recipientField
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+            Spacer(minLength: 12)
+            amountDisplay
+            noteField
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+            Spacer(minLength: 12)
+            if !noteFocused {
+                AmountKeypad(amount: $amountText).padding(.horizontal, 12)
                 gaslessToggle
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
                 actionButtons
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
             }
-            .padding(24)
         }
     }
 
-    private var amountField: some View {
-        HStack(spacing: 2) {
-            Text("$").font(.amount(44)).foregroundStyle(amount > 0 ? Theme.ink : Theme.subtle)
-            TextField("0", text: $amountText)
-                .font(.amount(44))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.leading)
+    private var recipientField: some View {
+        HStack(spacing: 10) {
+            Text("To").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.subtle)
+            TextField("wallet address 0x…", text: $recipient)
+                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            Button {
+                recipient = UIPasteboard.general.string ?? recipient
+            } label: {
+                Image(systemName: "doc.on.clipboard").foregroundStyle(Theme.blueDark)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 12).padding(.horizontal, 16)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var amountDisplay: some View {
+        Text("$" + amountText)
+            .font(.system(size: 60, weight: .bold))
+            .foregroundStyle(amount > 0 ? Theme.ink : Theme.subtle)
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+            .padding(.horizontal, 20)
+            .contentTransition(.numericText())
+            .animation(.snappy, value: amountText)
     }
 
     private var noteField: some View {
         HStack {
             TextField("What's it for?", text: $note)
-                .font(.system(size: 17, weight: .medium))
-            if note.isEmpty {
+                .font(.system(size: 16, weight: .medium))
+                .multilineTextAlignment(.center)
+                .focused($noteFocused)
+            if note.isEmpty && !noteFocused {
                 Image(systemName: "face.smiling").foregroundStyle(Theme.subtle)
             }
         }
-        .padding(.vertical, 14).padding(.horizontal, 16)
+        .padding(.vertical, 12).padding(.horizontal, 16)
         .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private var recipientField: some View {
-        VStack(spacing: 4) {
-            Text("To (wallet address)")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.subtle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack {
-                TextField("0x…", text: $recipient)
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                Button {
-                    recipient = UIPasteboard.general.string ?? recipient
-                } label: {
-                    Image(systemName: "doc.on.clipboard").foregroundStyle(Theme.blueDark)
-                }
-            }
-            .padding(.vertical, 14).padding(.horizontal, 16)
-            .background(Theme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
+        .clipShape(Capsule())
     }
 
     private var gaslessToggle: some View {
-        VStack(spacing: 8) {
-            Picker("Gas", selection: $sponsored) {
-                Text("Gasless (7702)").tag(true)
-                Text("Pay own gas").tag(false)
-            }
-            .pickerStyle(.segmented)
-            Label(
-                sponsored
-                    ? "Gasless via EIP-7702 — sponsored, no ETH needed"
-                    : "Normal transaction — your wallet pays gas (needs ETH)",
-                systemImage: sponsored ? "bolt.fill" : "fuelpump.fill"
-            )
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(sponsored ? Theme.blueDark : Theme.subtle)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        Picker("Gas", selection: $sponsored) {
+            Text("Gasless (7702)").tag(true)
+            Text("Pay own gas").tag(false)
         }
+        .pickerStyle(.segmented)
     }
 
     private var actionButtons: some View {
@@ -199,5 +201,43 @@ struct PayView: View {
             Button("Done") { dismiss() }.buttonStyle(PrimaryButtonStyle())
         }
         .padding(24)
+    }
+}
+
+/// Venmo-style numeric keypad that edits a decimal-amount string in place.
+struct AmountKeypad: View {
+    @Binding var amount: String
+    private let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"]
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 4) {
+            ForEach(keys, id: \.self) { key in
+                Button { tap(key) } label: {
+                    Text(key)
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(Theme.ink)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+    }
+
+    private func tap(_ key: String) {
+        var value = amount
+        switch key {
+        case "⌫":
+            value = String(value.dropLast())
+            if value.isEmpty { value = "0" }
+        case ".":
+            if !value.contains(".") { value += "." }
+        default:
+            if value == "0" { value = key } else { value += key }
+        }
+        if let dot = value.firstIndex(of: "."), value.distance(from: dot, to: value.endIndex) > 3 {
+            return // cap at 2 decimal places
+        }
+        amount = value
     }
 }
