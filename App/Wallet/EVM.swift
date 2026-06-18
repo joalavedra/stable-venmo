@@ -46,22 +46,6 @@ enum EVM {
     }
 }
 
-/// A chain the embedded wallet can switch to, for validating `wallet_switchEthereumChain`.
-struct Chain: Identifiable, Equatable, Sendable {
-    let id: Int        // EIP-155 chain id
-    let name: String
-    let hex: String    // chain id as a 0x-prefixed hex string
-
-    static let baseSepolia = Chain(id: 84532, name: "Base Sepolia", hex: "0x14a34")
-    static let polygonAmoy = Chain(id: 80002, name: "Polygon Amoy", hex: "0x13882")
-    static let supported: [Chain] = [.baseSepolia, .polygonAmoy]
-
-    static func named(_ id: Int?) -> Chain? {
-        guard let id else { return nil }
-        return supported.first { $0.id == id }
-    }
-}
-
 /// Minimal JSON-RPC read path for `eth_call balanceOf`. Balance reads don't need the wallet,
 /// so a plain RPC call against the public endpoint is simpler than going through the provider.
 enum RPC {

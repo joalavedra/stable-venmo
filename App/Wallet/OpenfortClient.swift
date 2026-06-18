@@ -85,27 +85,6 @@ enum OpenfortClient {
         try await OFSDK.shared.exportPrivateKey()
     }
 
-    // MARK: - Network (switch chains)
-
-    /// Reads the provider's active chain id (decimal) via `eth_chainId`.
-    static func currentChainId() async throws -> Int? {
-        let provider = try await OFSDK.shared.getEthereumProvider(params: OFGetEthereumProviderParams())
-        guard let provider else { throw ClientError(message: "No Ethereum provider.") }
-        guard let hex = try await provider.request(method: "eth_chainId", params: []) else { return nil }
-        return Int(hex.dropFirst(2), radix: 16)
-    }
-
-    /// Switches the active chain via `wallet_switchEthereumChain`, then reads `eth_chainId` back to
-    /// confirm. Returns the confirmed chain id.
-    @discardableResult
-    static func switchChain(toHex hex: String) async throws -> Int? {
-        let provider = try await OFSDK.shared.getEthereumProvider(params: OFGetEthereumProviderParams())
-        guard let provider else { throw ClientError(message: "No Ethereum provider.") }
-        _ = try await provider.request(method: "wallet_switchEthereumChain", params: [["chainId": hex]])
-        guard let confirmed = try await provider.request(method: "eth_chainId", params: []) else { return nil }
-        return Int(confirmed.dropFirst(2), radix: 16)
-    }
-
     // MARK: - Send (gasless USDC transfer via EIP-7702)
 
     /// Sends USDC gaslessly through the EIP-1193 provider with a sponsorship policy. On a Calibur

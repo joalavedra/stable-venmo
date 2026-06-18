@@ -2,6 +2,19 @@ import Combine
 import Foundation
 import OpenfortSwift
 
+/// A transient payment notification shown over the whole app while a send is in flight and after
+/// it resolves, so the composer can dismiss immediately instead of blocking on an in-modal result.
+struct PaymentToast: Identifiable, Equatable {
+    enum Phase: Equatable { case sending, success, failed }
+    let id = UUID()
+    var phase: Phase
+    var amount: Decimal
+    var recipient: String
+    var note: String
+    var hash: String?
+    var detail: String?
+}
+
 /// Single source of truth for the UI. Subscribes to the SDK's embedded-state publisher and
 /// derives which screen to show, auto-configuring the wallet once the user authenticates.
 @MainActor
@@ -14,12 +27,12 @@ final class WalletStore: ObservableObject {
     @Published private(set) var balance: Decimal = 0
     @Published private(set) var accountType: String?
     @Published private(set) var isDeployed = false
-    @Published private(set) var activeChainId: Int?
     @Published private(set) var balanceLoading = false
     @Published var busy = false
     @Published var otpRequested = false
     @Published var email = ""
     @Published var errorMessage: String?
+    @Published var toast: PaymentToast?
 
     private var cancellables = Set<AnyCancellable>()
     private var lastState: OFEmbeddedState?
@@ -105,7 +118,6 @@ final class WalletStore: ObservableObject {
         userEmail = await OpenfortClient.currentEmail()
         await refreshBalance()
         await refreshDeployment()
-        await loadActiveChain()
     }
 
     private func apply(account: OFEmbeddedAccount?) {
@@ -130,7 +142,7 @@ final class WalletStore: ObservableObject {
             for _ in 0..<6 {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 guard let self, !Task.isCancelled else { return }
-                await self.refreshBalance()
+                await self.refreshBalance(showLoading: false)
                 await self.refreshDeployment()
             }
         }
@@ -161,15 +173,22 @@ final class WalletStore: ObservableObject {
         address = nil
         userEmail = nil
         balance = 0
-        activeChainId = nil
+        email = ""
+        toast = nil
+        // Drive the UI straight back to auth instead of waiting on the SDK's state publisher,
+        // which doesn't reliably emit `.unauthenticated` after logout (so the button looked dead).
+        lastState = .unauthenticated
+        state = .unauthenticated
     }
 
     // MARK: - Money
 
-    func refreshBalance() async {
+    /// Reads the on-chain USDC balance. `showLoading: false` keeps the spinner off for the silent
+    /// background polls so the balance card doesn't flicker on every auto-refresh.
+    func refreshBalance(showLoading: Bool = true) async {
         guard let address else { return }
-        balanceLoading = true
-        defer { balanceLoading = false }
+        if showLoading { balanceLoading = true }
+        defer { if showLoading { balanceLoading = false } }
         if let fresh = try? await RPC.usdcBalance(of: address) { balance = fresh }
     }
 
@@ -178,35 +197,51 @@ final class WalletStore: ObservableObject {
         catch { errorMessage = friendly(error); return nil }
     }
 
-    // MARK: - Network
-
-    func loadActiveChain() async {
-        activeChainId = try? await OpenfortClient.currentChainId()
-    }
-
-    /// Switches the embedded wallet's active chain (validates `wallet_switchEthereumChain`).
-    func switchNetwork(to chain: Chain) async {
-        await run {
-            activeChainId = try await OpenfortClient.switchChain(toHex: chain.hex) ?? chain.id
+    /// Fire-and-forget payment. The composer dismisses immediately; the outcome is reported through
+    /// a transient toast (sending → success/failed) instead of an in-modal result screen or the
+    /// global error alert.
+    func pay(to recipient: String, amount: Decimal, note: String, sponsored: Bool) {
+        guard let address else { return }
+        showToast(PaymentToast(phase: .sending, amount: amount, recipient: recipient, note: note))
+        Task {
+            do {
+                let hash = sponsored
+                    ? try await OpenfortClient.sendUSDC(from: address, to: recipient, amount: amount)
+                    : try await OpenfortClient.sendUSDCNormal(from: address, to: recipient, amount: amount)
+                NoteStore.save(note, for: hash)
+                await refreshBalance(showLoading: false)
+                await refreshDeployment()
+                startBalanceSettle()
+                showToast(PaymentToast(
+                    phase: .success, amount: amount, recipient: recipient, note: note, hash: hash
+                ))
+            } catch {
+                showToast(PaymentToast(
+                    phase: .failed, amount: amount, recipient: recipient, note: note,
+                    detail: friendly(error)
+                ))
+            }
         }
     }
 
-    func send(to recipient: String, amount: Decimal, sponsored: Bool) async -> String? {
-        guard let address else { return nil }
-        busy = true
-        defer { busy = false }
-        do {
-            let hash = sponsored
-                ? try await OpenfortClient.sendUSDC(from: address, to: recipient, amount: amount)
-                : try await OpenfortClient.sendUSDCNormal(from: address, to: recipient, amount: amount)
-            await refreshBalance()
-            await refreshDeployment()
-            startBalanceSettle()
-            return hash
-        } catch {
-            errorMessage = friendly(error)
-            return nil
+    private var toastDismissTask: Task<Void, Never>?
+
+    /// Shows a toast, auto-dismissing resolved ones (success/failed) after a few seconds. The
+    /// "sending" toast stays until its send resolves and replaces it.
+    private func showToast(_ next: PaymentToast) {
+        toastDismissTask?.cancel()
+        toast = next
+        guard next.phase != .sending else { return }
+        toastDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            if self.toast?.id == next.id { self.toast = nil }
         }
+    }
+
+    func dismissToast() {
+        toastDismissTask?.cancel()
+        toast = nil
     }
 
     // MARK: - Helpers

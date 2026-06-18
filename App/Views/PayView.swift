@@ -14,7 +14,6 @@ struct PayView: View {
     @State private var amountText: String
     @State private var note = ""
     @State private var sponsored = true
-    @State private var txHash: String?
     @State private var requested = false
 
     init(presetAmount: Decimal) {
@@ -24,21 +23,19 @@ struct PayView: View {
 
     private var amount: Decimal { Decimal(string: amountText) ?? 0 }
     private var validRecipient: Bool { recipient.hasPrefix("0x") && recipient.count == 42 }
-    private var canPay: Bool { !wallet.busy && amount > 0 && validRecipient }
+    private var canPay: Bool { amount > 0 && validRecipient }
     private var canRequest: Bool { amount > 0 }
 
     var body: some View {
         NavigationStack {
             Group {
-                if let txHash {
-                    paySuccess(txHash)
-                } else if requested {
+                if requested {
                     requestCreated
                 } else {
                     composer
                 }
             }
-            .navigationTitle(txHash != nil || requested ? "" : "Pay or Request")
+            .navigationTitle(requested ? "" : "Pay or Request")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -83,11 +80,12 @@ struct PayView: View {
                 .font(.system(size: 15, weight: .medium, design: .monospaced))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-            Button {
-                recipient = UIPasteboard.general.string ?? recipient
-            } label: {
-                Image(systemName: "doc.on.clipboard").foregroundStyle(Theme.blueDark)
+            PasteButton(payloadType: String.self) { items in
+                guard let text = items.first else { return }
+                recipient = text.trimmingCharacters(in: .whitespacesAndNewlines)
             }
+            .labelStyle(.iconOnly)
+            .tint(Theme.blue)
         }
         .padding(.vertical, 12).padding(.horizontal, 16)
         .background(Theme.surface)
@@ -135,13 +133,10 @@ struct PayView: View {
                 .disabled(!canRequest)
                 .opacity(canRequest ? 1 : 0.5)
             Button {
-                Task {
-                    let hash = await wallet.send(to: recipient, amount: amount, sponsored: sponsored)
-                    if let hash { NoteStore.save(note, for: hash) }
-                    txHash = hash
-                }
+                wallet.pay(to: recipient, amount: amount, note: note, sponsored: sponsored)
+                dismiss()
             } label: {
-                Text(wallet.busy ? "Paying…" : "Pay")
+                Text("Pay")
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(!canPay)
@@ -150,31 +145,6 @@ struct PayView: View {
     }
 
     // MARK: - Results
-
-    private func paySuccess(_ hash: String) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60)).foregroundStyle(Theme.blue)
-            Text("You paid \(formatUSD(amount))")
-                .font(.system(size: 23, weight: .bold))
-            if !note.trimmingCharacters(in: .whitespaces).isEmpty {
-                Text(note).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.subtle)
-            }
-            Label(
-                sponsored ? "Gasless · EIP-7702 sponsored" : "Normal · wallet paid gas",
-                systemImage: sponsored ? "bolt.fill" : "fuelpump.fill"
-            )
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(sponsored ? Theme.blueDark : Theme.subtle)
-            Link("View on BaseScan", destination: URL(string: "https://sepolia.basescan.org/tx/\(hash)")!)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.blueDark)
-            Spacer()
-            Button("Done") { dismiss() }.buttonStyle(PrimaryButtonStyle())
-        }
-        .padding(24)
-    }
 
     private var requestCreated: some View {
         VStack(spacing: 18) {
