@@ -34,11 +34,11 @@ struct LogoMark: View {
     }
 }
 
-/// Venmo's lowercase wordmark.
+/// The lowercase wordmark.
 struct Wordmark: View {
     var size: CGFloat = 28
     var body: some View {
-        Text("venmo")
+        Text("venma")
             .font(.system(size: size, weight: .bold, design: .default))
             .foregroundStyle(Theme.blue)
     }
@@ -107,6 +107,80 @@ struct QRCode: View {
     }
 }
 
+/// A floating notification card for an in-flight payment: a spinner while sending, then a
+/// success or failure state that auto-dismisses. Replaces the old in-modal result screen so the
+/// composer can close the moment "Pay" is tapped.
+struct PaymentToastView: View {
+    let toast: PaymentToast
+    var onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            icon
+                .frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.subtle)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if toast.phase != .sending {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.subtle)
+                        .padding(6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.hairline)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder private var icon: some View {
+        switch toast.phase {
+        case .sending:
+            ProgressView().tint(Theme.blue)
+        case .success:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24)).foregroundStyle(Theme.blue)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 24)).foregroundStyle(.red)
+        }
+    }
+
+    private var title: String {
+        switch toast.phase {
+        case .sending: return "Sending \(formatUSD(toast.amount))"
+        case .success: return "Sent \(formatUSD(toast.amount))"
+        case .failed: return "Payment failed"
+        }
+    }
+
+    private var subtitle: String {
+        switch toast.phase {
+        case .sending, .success:
+            let trimmed = toast.note.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty ? "To \(shortAddress(toast.recipient))" : trimmed
+        case .failed:
+            return toast.detail ?? "Something went wrong. Please try again."
+        }
+    }
+}
+
 extension View {
     /// Binds an optional error string to a dismissible alert.
     func errorAlert(_ message: Binding<String?>) -> some View {
@@ -154,6 +228,6 @@ enum NoteStore {
 
     /// A note to display for a transfer: the stored one, or a sensible default by direction.
     static func display(for hash: String, outgoing: Bool) -> String {
-        note(for: hash) ?? (outgoing ? "💸 Payment" : "🤝 Payment")
+        note(for: hash) ?? "Payment"
     }
 }

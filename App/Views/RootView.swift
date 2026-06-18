@@ -13,12 +13,19 @@ struct RootView: View {
             case .auth:
                 AuthView()
             case .settingUp:
-                SplashScreen(caption: "Setting up your Venmo account…")
+                SplashScreen(caption: "Setting up your Venma account…")
             case .home:
                 MainView()
             }
         }
         .animation(.easeInOut(duration: 0.25), value: wallet.screen)
         .errorAlert($wallet.errorMessage)
+        .overlay(alignment: .top) {
+            if let toast = wallet.toast {
+                PaymentToastView(toast: toast) { wallet.dismissToast() }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: wallet.toast)
     }
 }

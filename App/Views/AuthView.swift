@@ -29,7 +29,7 @@ struct AuthView: View {
 
     private var emailStep: some View {
         VStack(spacing: 20) {
-            Text("Log in to Venmo")
+            Text("Log in to Venma")
                 .font(.system(size: 26, weight: .bold))
             TextField("you@email.com", text: $wallet.email)
                 .keyboardType(.emailAddress)

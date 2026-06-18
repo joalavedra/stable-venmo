@@ -5,6 +5,7 @@ import SwiftUI
 struct FeedView: View {
     @EnvironmentObject private var wallet: WalletStore
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var transfers: [USDCTransfer] = []
     @State private var loading = false
     @State private var showReceive = false
@@ -22,13 +23,11 @@ struct FeedView: View {
                     } else {
                         feedList
                     }
-                    if let address = wallet.address {
-                        Link("View full history on BaseScan",
-                             destination: URL(string: "https://sepolia.basescan.org/address/\(address)")!)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.blueDark)
-                            .padding(.top, 4)
-                    }
+                    Text("Your USDC balance and activity, live on Base Sepolia.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.subtle)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 6)
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 24)
@@ -45,7 +44,10 @@ struct FeedView: View {
                 }
             }
             .refreshable { await load() }
-            .task { await load() }
+            .task(id: wallet.address) { await autoRefresh() }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active { Task { await wallet.refreshBalance(showLoading: false) } }
+            }
             .sheet(isPresented: $showReceive) { ReceiveView(presetAmount: 0) }
         }
     }
@@ -55,7 +57,7 @@ struct FeedView: View {
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Venmo balance")
+                Text("Venma balance")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                 Spacer()
@@ -134,6 +136,21 @@ struct FeedView: View {
         defer { loading = false }
         await wallet.refreshBalance()
         if let result = try? await RPC.usdcTransfers(of: address) { transfers = result }
+    }
+
+    /// Initial load, then a quiet poll so the balance and feed stay current while home is visible
+    /// without the user tapping refresh. Cancelled automatically when the view leaves the screen.
+    private func autoRefresh() async {
+        await load()
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            if Task.isCancelled { break }
+            await wallet.refreshBalance(showLoading: false)
+            if let address = wallet.address,
+               let result = try? await RPC.usdcTransfers(of: address) {
+                transfers = result
+            }
+        }
     }
 }
 
