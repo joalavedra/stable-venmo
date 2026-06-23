@@ -9,6 +9,7 @@ struct FeedView: View {
     @State private var transfers: [USDCTransfer] = []
     @State private var loading = false
     @State private var showReceive = false
+    @State private var showAddFunds = false
 
     var body: some View {
         NavigationStack {
@@ -23,7 +24,7 @@ struct FeedView: View {
                     } else {
                         feedList
                     }
-                    Text("Your USDC balance and activity, live on Base Sepolia.")
+                    Text("Your USDC balance and activity, live on Base.")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.subtle)
                         .multilineTextAlignment(.center)
@@ -49,6 +50,7 @@ struct FeedView: View {
                 if phase == .active { Task { await wallet.refreshBalance(showLoading: false) } }
             }
             .sheet(isPresented: $showReceive) { ReceiveView(presetAmount: 0) }
+            .sheet(isPresented: $showAddFunds) { AddFundsView() }
         }
     }
 
@@ -75,14 +77,25 @@ struct FeedView: View {
                     ProgressView().tint(.white).scaleEffect(0.8)
                 }
             }
-            Button { showReceive = true } label: {
-                Label("Receive", systemImage: "qrcode")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.blueDark)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            HStack(spacing: 10) {
+                Button { showAddFunds = true } label: {
+                    Label("Add funds", systemImage: "plus.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.blueDark)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                Button { showReceive = true } label: {
+                    Label("Receive", systemImage: "qrcode")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(.white.opacity(0.18))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
             }
         }
         .padding(18)
@@ -119,7 +132,7 @@ struct FeedView: View {
         VStack(spacing: 0) {
             ForEach(transfers) { transfer in
                 FeedRow(transfer: transfer) {
-                    if let url = URL(string: "https://sepolia.basescan.org/tx/\(transfer.hash)") {
+                    if let url = URL(string: "https://basescan.org/tx/\(transfer.hash)") {
                         openURL(url)
                     }
                 }

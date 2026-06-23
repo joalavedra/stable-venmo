@@ -5,6 +5,7 @@ import UIKit
 struct AuthView: View {
     @EnvironmentObject private var wallet: WalletStore
     @State private var code = ""
+    @State private var lastSubmitted = ""
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -89,6 +90,7 @@ struct AuthView: View {
             Button("Change email") {
                 wallet.otpRequested = false
                 code = ""
+                lastSubmitted = ""
             }
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(Theme.blueDark)
@@ -106,7 +108,15 @@ struct AuthView: View {
     private func handleCodeChange(_ value: String) {
         let digits = String(value.filter(\.isNumber).prefix(6))
         if digits != value { code = digits }
-        if digits.count == 6 { Task { await wallet.verify(code: digits) } }
+        // Re-arm once edited below 6 digits so a corrected code can resubmit.
+        if digits.count < 6 { lastSubmitted = "" }
+        // Submit each complete code at most once. onChange can fire twice for a single entry
+        // (and .oneTimeCode autofill re-sets it), which double-verified a now-consumed OTP and
+        // surfaced a spurious "incorrect code" even though the first verify had succeeded.
+        if digits.count == 6, digits != lastSubmitted {
+            lastSubmitted = digits
+            Task { await wallet.verify(code: digits) }
+        }
     }
 }
 

@@ -1,13 +1,15 @@
 import Foundation
 
-/// Chain + token constants and minimal ERC-20 calldata encoding for USDC on Base Sepolia.
+/// Chain + token constants and minimal ERC-20 calldata encoding for USDC on Base mainnet.
 enum EVM {
-    static let chainId = 84532                                  // Base Sepolia
-    static let chainHex = "0x14a34"
-    static let rpcURL = URL(string: "https://sepolia.base.org")!
+    static let chainId = 8453                                   // Base mainnet
+    static let chainHex = "0x2105"
+    /// CAIP-2 chain id (`eip155:<chainId>`) — the funding namespace's destination format.
+    static let caip2 = "eip155:8453"
+    static let rpcURL = URL(string: "https://mainnet.base.org")!
 
-    /// Circle USDC on Base Sepolia (6 decimals).
-    static let usdc = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    /// Circle USDC on Base mainnet (6 decimals), lowercase to match the funding rail's catalog.
+    static let usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
     static let usdcDecimals = 6
 
     // MARK: - ABI encoding (manual)

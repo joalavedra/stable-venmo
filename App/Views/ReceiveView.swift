@@ -21,7 +21,7 @@ struct ReceiveView: View {
                     .background(Theme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                Text("Your USDC address (Base Sepolia)")
+                Text("Your USDC address (Base)")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.subtle)
                 Text(wallet.address ?? "—")
