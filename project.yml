@@ -8,8 +8,9 @@ options:
 
 packages:
   OpenfortSwift:
+    # Funding (OFFunding) shipped in openfort-xyz/swift-sdk 2.1.0 (PR #14).
     url: https://github.com/openfort-xyz/swift-sdk.git
-    exactVersion: 2.0.0
+    exactVersion: 2.1.0
 
 settings:
   base:

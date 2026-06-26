@@ -5,7 +5,9 @@ import OpenfortSwift
 /// the auth, wallet, network, and send operations the app needs as plain `async` functions.
 @MainActor
 enum OpenfortClient {
-    /// Base Sepolia gas-sponsorship policy (MAIN project), so sends are gasless.
+    /// Gas-sponsorship policy so sends are gasless. NOTE: this id is from the old testnet (MAIN)
+    /// project — sponsored sends will fail until it's replaced with a Base **mainnet** policy id
+    /// from the live project. Funding (Add funds) does not use this policy.
     static let gasPolicy = "pol_e62f490a-eb28-45e6-8134-50681c65ee49"
 
     struct ClientError: LocalizedError { let message: String; var errorDescription: String? { message } }
@@ -63,16 +65,30 @@ enum OpenfortClient {
     @discardableResult
     static func configureWallet() async throws -> OFEmbeddedAccount? {
         // Delegated/smart accounts are chain-scoped, so pass the chainId (unlike a bare EOA).
-        try await OFSDK.shared.configure(
-            params: OFEmbeddedAccountConfigureParams(
-                chainId: EVM.chainId,
-                recoveryParams: OFRecoveryParamsDTO(
-                    recoveryMethod: .password,
-                    password: recoveryPassword
-                ),
-                accountType: .delegatedAccount
-            )
-        )
+        // Wrapped in a timeout: if the embedded-wallet/Shield handshake never completes (e.g. the
+        // project's embedded wallet isn't configured for this chain), the bridge call hangs with no
+        // error and the UI spins forever. Surface an actionable message instead.
+        try await withThrowingTaskGroup(of: OFEmbeddedAccount?.self) { group in
+            group.addTask { @MainActor in
+                try await OFSDK.shared.configure(
+                    params: OFEmbeddedAccountConfigureParams(
+                        chainId: EVM.chainId,
+                        recoveryParams: OFRecoveryParamsDTO(recoveryMethod: .password, password: recoveryPassword),
+                        accountType: .delegatedAccount
+                    )
+                )
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+                throw ClientError(
+                    message: "Wallet setup timed out (60s). The embedded wallet didn't initialize — "
+                        + "the project's embedded wallet / Shield may not be configured for this chain."
+                )
+            }
+            defer { group.cancelAll() }
+            let result = try await group.next() ?? nil
+            return result
+        }
     }
 
     /// The first embedded account (used when the wallet is already configured on app relaunch
