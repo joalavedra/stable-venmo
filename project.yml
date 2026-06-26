@@ -8,11 +8,9 @@ options:
 
 packages:
   OpenfortSwift:
-    # Funding (OFFunding) lives on the feat/funding branch (openfort-xyz/swift-sdk#14).
-    # Switch to `url: https://github.com/openfort-xyz/swift-sdk.git` + a tagged
-    # `exactVersion` once that PR merges and a release ships.
-    url: https://github.com/joalavedra/swift-sdk.git
-    branch: feat/funding
+    # Funding (OFFunding) shipped in openfort-xyz/swift-sdk 2.1.0 (PR #14).
+    url: https://github.com/openfort-xyz/swift-sdk.git
+    exactVersion: 2.1.0
 
 settings:
   base:
